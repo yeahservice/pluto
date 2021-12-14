@@ -93,10 +93,13 @@ func (h *Helm) getReleasesVersionThree() error {
 	if err != nil {
 		return err
 	}
-	releases, err := helmClient.ListDeployed()
+	releases, err := helmClient.ListReleases()
 	if err != nil {
 		return err
 	}
+
+	releases = filterLatestReleases(releases)
+
 	for _, namespace := range namespaces.Items {
 		ns := namespace.Name
 		if h.Namespace != "" && ns != h.Namespace {
@@ -117,8 +120,27 @@ func (h *Helm) getReleasesVersionThree() error {
 	return nil
 }
 
+func filterLatestReleases(releases []*release.Release) []*release.Release {
+	filteredReleases := []*release.Release{}
+
+	latestReleases := make(map[string]*release.Release)
+	for _, release := range releases {
+		if _, ok := latestReleases[release.Name]; !ok {
+			latestReleases[release.Name] = release
+		} else if val := latestReleases[release.Name]; val.Version < release.Version {
+			latestReleases[release.Name] = release
+		}
+	}
+
+	for _, val := range latestReleases {
+		filteredReleases = append(filteredReleases, val)
+	}
+
+	return filteredReleases
+}
+
 func (h *Helm) deployedReleasesPerNamespace(namespace string, releases []*release.Release) []*release.Release {
-	return releaseutil.All(deployed, relNamespace(namespace)).Filter(releases)
+	return releaseutil.All(relNamespace(namespace)).Filter(releases)
 }
 
 func deployed(rls *release.Release) bool {
